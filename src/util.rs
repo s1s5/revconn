@@ -1,5 +1,4 @@
 use base64::{engine::general_purpose, Engine as _};
-use futures::StreamExt;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,

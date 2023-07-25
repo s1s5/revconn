@@ -10,7 +10,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::Sender,
 };
-use tracing::debug;
+use tracing::{debug, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -163,6 +163,7 @@ async fn transfer(
                         tx.send(Message::Data {id, data}).await?;
                     },
                     Message::Shutdown {message} => {
+                        info!("shutdown {:?}", message);
                         break;
                     },
                     _ => break,
@@ -170,27 +171,6 @@ async fn transfer(
             }
         }
     }
-
-    // Spawn a task that prints all received messages to STDOUT
-    // while let Some(msg) = deserialized.try_next().await.unwrap() {
-    //     println!("GOT: {:?}", msg);
-    // }
-
-    // Send the value
-    // serialized
-    //     .send(Message::NewConnection {
-    //         id: "hello".to_string(),
-    //     })
-    //     .await
-    //     .unwrap();
-
-    // let bytes = ri.read_u16().await?;
-
-    // let mut v = vec![0u8; 4096];
-    // ri.read_exact(&mut v[0..bytes as usize]).await?;
-
-    // let ri = MessageStream::new(ri);
-    // let o = ri.await?;
 
     Ok(())
 }

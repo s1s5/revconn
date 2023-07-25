@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use futures::StreamExt;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -63,4 +64,25 @@ pub async fn handle_connection(
     let r = handle_connection_inner(conn_id, rx, s2c_tx, conn).await;
     tx.send(Message::CloseConnection { id: conn_id }).await?;
     r
+}
+
+pub fn get_key_and_nonce_from_env(key: &mut [u8; 32], nonce: &mut [u8; 12]) {
+    // rPc0ATOUqsySPNoWtwa10+fSzLSNOq1vRJqz9qK0Aag=
+    // uUXAxcAFLg+tLQsG
+    let k = general_purpose::STANDARD
+        .decode(std::env::var("ENCRYPT_KEY").unwrap())
+        .unwrap();
+    let n = general_purpose::STANDARD
+        .decode(std::env::var("ENCRYPT_NONCE").unwrap())
+        .unwrap();
+
+    if k.len() < 32 {
+        panic!("encrypt_key length must be greater than 32");
+    }
+    if n.len() < 12 {
+        panic!("encrypt_key length must be greater than 32");
+    }
+
+    (0..32).into_iter().for_each(|i| key[i] = k[i]);
+    (0..12).into_iter().for_each(|i| nonce[i] = n[i]);
 }

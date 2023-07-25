@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use futures::{SinkExt, TryStreamExt};
+use revconn::encstream::{DecStream, EncStream};
 use revconn::protocol::Message;
-use revconn::util::handle_connection;
+use revconn::util::{get_key_and_nonce_from_env, handle_connection};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
@@ -22,6 +23,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .try_init()?;
+    let mut key = [0x42; 32];
+    let mut nonce = [0x24; 12];
+
+    get_key_and_nonce_from_env(&mut key, &mut nonce);
 
     let server_addr = "127.0.0.1:8000".to_string();
     let reverse_addr = "127.0.0.1:8001".to_string();
@@ -29,6 +34,8 @@ async fn main() -> anyhow::Result<()> {
     let mut conn = TcpStream::connect(server_addr).await?;
 
     let (ri, wi) = conn.split();
+    let ri = DecStream::new(ri, &key, &nonce);
+    let wi = EncStream::new(wi, &key, &nonce);
 
     let mut ri = {
         // Delimit frames using a length header

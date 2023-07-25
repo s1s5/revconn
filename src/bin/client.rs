@@ -15,6 +15,12 @@ use tracing_subscriber::util::SubscriberInitExt;
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(long)]
+    server: String,
+
+    #[arg(long)]
+    backend: String,
+
+    #[arg(long)]
     domain: String,
 
     #[arg(long)]
@@ -39,10 +45,7 @@ async fn main() -> anyhow::Result<()> {
 
     get_key_and_nonce_from_env(&mut key, &mut nonce);
 
-    let server_addr = "127.0.0.1:8000".to_string();
-    let reverse_addr = "127.0.0.1:8001".to_string();
-
-    let mut conn = TcpStream::connect(server_addr).await?;
+    let mut conn = TcpStream::connect(args.server).await?;
 
     let (ri, wi) = conn.split();
     let ri = DecStream::new(ri, &key, &nonce);
@@ -109,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
                             m.insert(id, tx);
                         }
 
-                        let conn = TcpStream::connect(reverse_addr.clone()).await?;
+                        let conn = TcpStream::connect(args.backend.clone()).await?;
                         let gtx = gtx.clone();
                         tokio::spawn(handle_connection(id, rx, gtx, conn));
                     }

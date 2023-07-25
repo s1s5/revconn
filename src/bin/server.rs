@@ -18,6 +18,9 @@ use tracing_subscriber::util::SubscriberInitExt;
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(long)]
+    bind: Option<String>,
+
+    #[arg(long)]
     callback: Option<String>,
 }
 
@@ -39,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     let mut nonce = [0x24; 12];
     get_key_and_nonce_from_env(&mut key, &mut nonce);
 
-    let listen_addr = "0.0.0.0:8000".to_string();
+    let listen_addr = args.bind.unwrap_or("0.0.0.0:8000".to_string());
     let listener = TcpListener::bind(listen_addr).await?;
 
     while let Ok((inbound, _)) = listener.accept().await {

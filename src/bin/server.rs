@@ -1,37 +1,29 @@
 use clap::Parser;
-use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
+use futures::{FutureExt, SinkExt, TryStreamExt};
 use revconn::{
     encstream::{DecStream, EncStream},
-    protocol::Message,
+    protocol::{ExternalMessage, Message},
     util::{get_key_and_nonce_from_env, handle_connection},
 };
 use std::{collections::HashMap, sync::Mutex};
 use tokio::{
-    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
     sync::mpsc::Sender,
 };
-use tracing::{debug, info};
+use tracing::debug;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-// use tokio_serde_bincode::ReadBincode;
-// use tokio_serde::{Deserializer, Framed};
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
-    #[arg(short, long)]
-    name: String,
-
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    #[arg(long)]
+    callback: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::Layer::new()
@@ -51,11 +43,12 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(listen_addr).await?;
 
     while let Ok((inbound, _)) = listener.accept().await {
-        let transfer = transfer(inbound, key.clone(), nonce.clone()).map(|r| {
-            if let Err(e) = r {
-                println!("Failed to transfer; error={}", e);
-            }
-        });
+        let transfer =
+            transfer(inbound, key.clone(), nonce.clone(), args.callback.clone()).map(|r| {
+                if let Err(e) = r {
+                    println!("Failed to transfer; error={}", e);
+                }
+            });
 
         tokio::spawn(transfer);
     }
@@ -63,7 +56,12 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn transfer(mut inbound: TcpStream, key: [u8; 32], nonce: [u8; 12]) -> anyhow::Result<()> {
+async fn transfer(
+    mut inbound: TcpStream,
+    key: [u8; 32],
+    nonce: [u8; 12],
+    callback: Option<String>,
+) -> anyhow::Result<()> {
     let mut conn_id = 0;
     // let (c2s_tx, mut c2s_rx) = tokio::sync::mpsc::channel::<Message>(32);
     let (s2c_tx, mut s2c_rx) = tokio::sync::mpsc::channel::<Message>(32);
@@ -98,15 +96,27 @@ async fn transfer(mut inbound: TcpStream, key: [u8; 32], nonce: [u8; 12]) -> any
         );
         serialized
     };
+
+    let client = reqwest::Client::new();
     match ri.try_next().await?.ok_or(anyhow::anyhow!("not message"))? {
-        Message::ClientHello {
-            domain,
-            path,
-            auth_token,
-        } => {
+        Message::ClientHello { domain, path } => {
+            let path = path.unwrap_or("".to_string());
+            if let Some(callback) = callback {
+                client
+                    .post(callback)
+                    .body(
+                        serde_json::to_string(&ExternalMessage::NewConnection {
+                            domain: domain.clone(),
+                            path: path.clone(),
+                        })
+                        .unwrap(),
+                    )
+                    .send()
+                    .await?;
+            }
             wi.send(Message::ServerHello {
-                domain: "hello".to_string(),
-                path: "".to_string(),
+                domain: domain,
+                path: path,
             })
             .await?;
         }

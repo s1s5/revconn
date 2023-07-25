@@ -1,18 +1,29 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
-
+use clap::Parser;
 use futures::{SinkExt, TryStreamExt};
 use revconn::encstream::{DecStream, EncStream};
 use revconn::protocol::Message;
 use revconn::util::{get_key_and_nonce_from_env, handle_connection};
-use tokio::net::{TcpSocket, TcpStream};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use tokio::net::TcpStream;
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(long)]
+    domain: String,
+
+    #[arg(long)]
+    path: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::fmt::Layer::new()
@@ -64,9 +75,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     wi.send(Message::ClientHello {
-        domain: Some("hello".to_string()),
-        path: Some("".to_string()),
-        auth_token: "".to_string(),
+        domain: args.domain,
+        path: args.path,
     })
     .await?;
     debug!("send hello to server");

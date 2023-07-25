@@ -3,9 +3,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub enum Message {
     ClientHello {
-        domain: Option<String>,
+        domain: String,
         path: Option<String>,
-        auth_token: String,
     },
     ServerHello {
         domain: String,
@@ -29,11 +28,7 @@ pub enum Message {
 impl std::fmt::Debug for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Message::ClientHello {
-                domain,
-                path,
-                auth_token: _,
-            } => {
+            Message::ClientHello { domain, path } => {
                 write!(
                     f,
                     "Message::ClientHello domain={:?}, path={:?}",
@@ -57,4 +52,9 @@ impl std::fmt::Debug for Message {
             }
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum ExternalMessage {
+    NewConnection { domain: String, path: String },
 }

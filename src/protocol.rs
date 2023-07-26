@@ -58,11 +58,13 @@ impl std::fmt::Debug for Message {
 #[serde(tag = "type")]
 pub enum ExternalMessage {
     NewConnection {
+        conn_id: String,
         domain: String,
         path: String,
         port: u16,
     },
     ShutdownConnection {
+        conn_id: String,
         domain: String,
         path: String,
         port: u16,

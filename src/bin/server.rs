@@ -61,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
 
 struct OnShutdown {
     callback: String,
+    conn_id: String,
     domain: String,
     path: String,
     port: u16,
@@ -69,6 +70,7 @@ struct OnShutdown {
 impl Drop for OnShutdown {
     fn drop(&mut self) {
         let callback = self.callback.clone();
+        let conn_id = self.conn_id.clone();
         let domain = self.domain.clone();
         let path = self.path.clone();
         let port = self.port;
@@ -78,9 +80,10 @@ impl Drop for OnShutdown {
                 .post(callback)
                 .body(
                     serde_json::to_string(&ExternalMessage::ShutdownConnection {
-                        domain: domain.clone(),
-                        path: path.clone(),
-                        port: port,
+                        conn_id,
+                        domain,
+                        path,
+                        port,
                     })
                     .unwrap(),
                 )
@@ -146,8 +149,10 @@ async fn transfer(
     };
 
     let listener = TcpListener::bind("0.0.0.0:0").await?;
+    let conn_uid = format!("conn-{}", hex::encode(uuid::Uuid::new_v4().as_bytes()));
     debug!(
-        "handshake complete waiting port={:?}",
+        "handshake complete waiting uid={}, port={}",
+        conn_uid,
         listener.local_addr()?.port()
     );
 
@@ -156,6 +161,7 @@ async fn transfer(
             .post(&callback)
             .body(
                 serde_json::to_string(&ExternalMessage::NewConnection {
+                    conn_id: conn_uid.clone(),
                     domain: domain.clone(),
                     path: path.clone(),
                     port: listener.local_addr()?.port(),
@@ -167,6 +173,7 @@ async fn transfer(
         {
             Ok(_) => Some(OnShutdown {
                 callback: callback.clone(),
+                conn_id: conn_uid.clone(),
                 domain: domain.clone(),
                 path: path.clone(),
                 port: listener.local_addr()?.port(),

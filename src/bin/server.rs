@@ -78,6 +78,7 @@ impl Drop for OnShutdown {
             let client = reqwest::Client::new();
             match client
                 .post(callback)
+                .header("Content-Type", "application/json")
                 .body(
                     serde_json::to_string(&ExternalMessage::ShutdownConnection {
                         conn_id,
@@ -141,7 +142,8 @@ async fn transfer(
     let client = reqwest::Client::new();
     let (domain, path) = match ri.try_next().await?.ok_or(anyhow::anyhow!("not message"))? {
         Message::ClientHello { domain, path } => {
-            let path = path.unwrap_or("".to_string());
+            let path = path.unwrap_or("/".to_string());
+            let path = if path == "" { "/".to_string() } else { path };
 
             (domain, path)
         }
@@ -159,6 +161,7 @@ async fn transfer(
     let _on_shutdown = if let Some(callback) = callback {
         match client
             .post(&callback)
+            .header("Content-Type", "application/json")
             .body(
                 serde_json::to_string(&ExternalMessage::NewConnection {
                     conn_id: conn_uid.clone(),
@@ -171,13 +174,16 @@ async fn transfer(
             .send()
             .await
         {
-            Ok(_) => Some(OnShutdown {
-                callback: callback.clone(),
-                conn_id: conn_uid.clone(),
-                domain: domain.clone(),
-                path: path.clone(),
-                port: listener.local_addr()?.port(),
-            }),
+            Ok(_r) => {
+                println!("response: {:?}", _r);
+                Some(OnShutdown {
+                    callback: callback.clone(),
+                    conn_id: conn_uid.clone(),
+                    domain: domain.clone(),
+                    path: path.clone(),
+                    port: listener.local_addr()?.port(),
+                })
+            }
             Err(err) => {
                 error!("Error sending message to callback {:?}", err);
                 None

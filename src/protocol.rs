@@ -55,6 +55,16 @@ impl std::fmt::Debug for Message {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum ExternalMessage {
-    NewConnection { domain: String, path: String },
+    NewConnection {
+        domain: String,
+        path: String,
+        port: u16,
+    },
+    ShutdownConnection {
+        domain: String,
+        path: String,
+        port: u16,
+    },
 }

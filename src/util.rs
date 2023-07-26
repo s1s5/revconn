@@ -66,8 +66,8 @@ pub async fn handle_connection(
 }
 
 pub fn get_key_and_nonce_from_env(key: &mut [u8; 32], nonce: &mut [u8; 12]) {
-    // rPc0ATOUqsySPNoWtwa10+fSzLSNOq1vRJqz9qK0Aag=
-    // uUXAxcAFLg+tLQsG
+    // export ENCRYPT_KEY=rPc0ATOUqsySPNoWtwa10+fSzLSNOq1vRJqz9qK0Aag=
+    // export ENCRYPT_NONCE=uUXAxcAFLg+tLQsG
     let k = general_purpose::STANDARD
         .decode(std::env::var("ENCRYPT_KEY").unwrap())
         .unwrap();

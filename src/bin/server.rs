@@ -10,7 +10,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::Sender,
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -59,6 +59,41 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+struct OnShutdown {
+    callback: String,
+    domain: String,
+    path: String,
+    port: u16,
+}
+
+impl Drop for OnShutdown {
+    fn drop(&mut self) {
+        let callback = self.callback.clone();
+        let domain = self.domain.clone();
+        let path = self.path.clone();
+        let port = self.port;
+        tokio::spawn(async move {
+            let client = reqwest::Client::new();
+            match client
+                .post(callback)
+                .body(
+                    serde_json::to_string(&ExternalMessage::ShutdownConnection {
+                        domain: domain.clone(),
+                        path: path.clone(),
+                        port: port,
+                    })
+                    .unwrap(),
+                )
+                .send()
+                .await
+            {
+                Ok(_) => {}
+                Err(err) => error!("Error sending message to callback {:?}", err),
+            };
+        });
+    }
+}
+
 async fn transfer(
     mut inbound: TcpStream,
     key: [u8; 32],
@@ -101,33 +136,50 @@ async fn transfer(
     };
 
     let client = reqwest::Client::new();
-    match ri.try_next().await?.ok_or(anyhow::anyhow!("not message"))? {
+    let (domain, path) = match ri.try_next().await?.ok_or(anyhow::anyhow!("not message"))? {
         Message::ClientHello { domain, path } => {
             let path = path.unwrap_or("".to_string());
-            if let Some(callback) = callback {
-                client
-                    .post(callback)
-                    .body(
-                        serde_json::to_string(&ExternalMessage::NewConnection {
-                            domain: domain.clone(),
-                            path: path.clone(),
-                        })
-                        .unwrap(),
-                    )
-                    .send()
-                    .await?;
-            }
-            wi.send(Message::ServerHello {
-                domain: domain,
-                path: path,
-            })
-            .await?;
+
+            (domain, path)
         }
         _ => Err(anyhow::anyhow!("invalid Message"))?,
-    }
+    };
 
-    let listener = TcpListener::bind("0.0.0.0:8002").await?;
-    debug!("handshake complete waiting port=8002");
+    let listener = TcpListener::bind("0.0.0.0:0").await?;
+    debug!(
+        "handshake complete waiting port={:?}",
+        listener.local_addr()?.port()
+    );
+
+    let _on_shutdown = if let Some(callback) = callback {
+        match client
+            .post(&callback)
+            .body(
+                serde_json::to_string(&ExternalMessage::NewConnection {
+                    domain: domain.clone(),
+                    path: path.clone(),
+                    port: listener.local_addr()?.port(),
+                })
+                .unwrap(),
+            )
+            .send()
+            .await
+        {
+            Ok(_) => Some(OnShutdown {
+                callback: callback.clone(),
+                domain: domain.clone(),
+                path: path.clone(),
+                port: listener.local_addr()?.port(),
+            }),
+            Err(err) => {
+                error!("Error sending message to callback {:?}", err);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    wi.send(Message::ServerHello { domain, path }).await?;
 
     loop {
         tokio::select! {
